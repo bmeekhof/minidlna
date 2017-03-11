@@ -348,8 +348,10 @@ find_album_art(const char *path, uint8_t *image_data, int image_size)
 	struct stat st;
 	char *album_art = NULL;
 	char *album_art_cache = check_embedded_art(path, image_data, image_size);
-	if (album_art_cache == NULL) album_art_cache = check_for_album_file(path, &album_art);
-	if (album_art_cache == NULL || lstat(album_art, &st) != 0) return 0;
+	if (album_art_cache == NULL) { 
+		album_art_cache = check_for_album_file(path, &album_art);
+		if (album_art_cache == NULL || lstat(album_art, &st) != 0) return 0;
+	}
 
 	int64_t ret = sql_get_int64_field(db, "SELECT ID from ALBUM_ART where PATH = %Q", album_art_cache);
 	if (ret == 0)
