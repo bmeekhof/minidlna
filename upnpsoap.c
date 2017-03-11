@@ -1024,8 +1024,15 @@ callback(void *args, int argc, char **argv, char **azColName)
 			snprintf(dlna_buf, sizeof(dlna_buf), "CREATIONDATE=0,FOLDER=%s,BM=%d", title, bookmark);
 			ret = append(str, dlna_buf, "sec:dcmInfo");
 		}
+		// return creator as artist if an audio type (so per-track artists on multi-artist releases show correctly)
+		if (creator && (passed_args->filter & FILTER_UPNP_ACTOR)) {
+			if (*mime != 'v') {
+				ret = append(str, creator, "upnp:artist");
+			}
+		}
+		// return artist as albumArtist for audio types
 		if (artists && (passed_args->filter & FILTER_UPNP_ACTOR)) {
-			ret = append_multiple_from_commaseparated_string(str, artists, *mime == 'v' ? "upnp:actor" : "upnp:artist");
+			ret = append_multiple_from_commaseparated_string(str, artists, *mime == 'v' ? "upnp:actor": "upnp:albumArtist");
 		}
 		if( album && (passed_args->filter & FILTER_UPNP_ALBUM) ) {
 			ret = append(str, album, *mime == 'v' ? "upnp:seriesTitle" : "upnp:album");
@@ -1231,8 +1238,8 @@ callback(void *args, int argc, char **argv, char **azColName)
 		if( genres && (passed_args->filter & FILTER_UPNP_GENRE) ) {
 			ret = append_multiple_from_commaseparated_string(str, genres, "upnp:genre");
 		}
-		if( artists && (passed_args->filter & FILTER_UPNP_ACTOR) ) {
-			ret = append_multiple_from_commaseparated_string(str, artists, "upnp:artist");
+		if( creator && (passed_args->filter & FILTER_UPNP_ACTOR) ) {
+			ret = append(str, creator, "upnp:artist");
 		}
 		if( NON_ZERO(album_art) && (passed_args->filter & FILTER_UPNP_ALBUMARTURI)) {
 			char *attribute = (passed_args->filter & FILTER_UPNP_ALBUMARTURI_DLNA_PROFILEID) ? "dlna:profileID=\"JPEG_TN\" xmlns:dlna=\"urn:schemas-dlna-org:metadata-1-0/\"" : "";
