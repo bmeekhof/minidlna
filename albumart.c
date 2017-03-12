@@ -76,6 +76,7 @@ save_resized_album_art_from_imsrc_to(const image_s *imsrc, const char *src_file,
 {
 	int dstw, dsth;
 	char *result;
+	struct stat st;
 
 	if (!imsrc || !image_size_type)
 		return -1;
@@ -93,10 +94,14 @@ save_resized_album_art_from_imsrc_to(const image_s *imsrc, const char *src_file,
 
 	if (dstw > imsrc->width && dsth > imsrc->height)
 	{
-		/* if requested dimensions are bigger than image, don't upsize but
-		 * link file or save as-is if linking fails */
-		int ret = link_file(src_file, dst_file);
-		result = (ret == 0) ? (char*)dst_file : image_save_to_jpeg_file(imsrc, dst_file);
+		/* if requested dimensions are bigger than image hardlink to src_file 
+		* if there is no source file or link fails somehow then just save the image blob */
+		if (lstat(src_file, &st) != 0) { 
+			result = image_save_to_jpeg_file(imsrc, dst_file);
+		} else {
+			int ret = link_file(src_file, dst_file);
+			result = (ret == 0) ? (char*)dst_file : image_save_to_jpeg_file(imsrc, dst_file);
+		}
 	}
 	else
 	{
@@ -120,15 +125,11 @@ save_resized_album_art_from_imsrc_to(const image_s *imsrc, const char *src_file,
 static char *
 save_resized_album_art_from_imsrc(const image_s *imsrc, const char *path, const image_size_type_t *image_size_type)
 {
-	char *cache_file, *dst_file;
+	char *dst_file;
 	if (!image_size_type)
 		return NULL;
-
-	art_cache_exists(path, &cache_file);
-	dst_file = get_path_from_image_size_type(cache_file, image_size_type);
-	free(cache_file);
-
-	int ret = save_resized_album_art_from_imsrc_to(imsrc, path, dst_file, image_size_type);
+	dst_file = get_path_from_image_size_type(path, image_size_type);
+	int ret = save_resized_album_art_from_imsrc_to(imsrc, path, dst_file, image_size_type);	
 	if (ret != 0)
 	{
 		free(dst_file);
@@ -206,7 +207,7 @@ update_if_album_art(const char *path)
 char *
 check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 {
-	char *art_path = NULL, *thumb_art_path = NULL;
+	char *cached_art_path = NULL, *art_path = NULL, *thumb_art_path = NULL;
 	image_s *imsrc;
 	static char last_path[PATH_MAX];
 	static unsigned int last_hash = 0;
@@ -217,6 +218,9 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 	{
 		return NULL;
 	}
+	
+	art_cache_exists(path, &cached_art_path);
+		
 	/* If the embedded image matches the embedded image from the last file we
 	 * checked, just make a link. Better than storing it on the disk twice. */
 	hash = DJBHash(image_data, image_size);
@@ -224,15 +228,13 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 	{
 		if( !last_success )
 			return NULL;
-		art_cache_exists(path, &art_path);
-
-		int ret = link_file(last_path, art_path);
+		int ret = link_file(last_path, cached_art_path);
 		if (ret == 0)
 		{
 			imsrc = image_new_from_jpeg(NULL, 0, image_data, image_size, 1, ROTATE_NONE);
-			goto save_resized;
+			art_path = cached_art_path;
+			goto save_resized;			
 		}
-		free(art_path);
 	}
 	last_hash = hash;
 
@@ -243,11 +245,11 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 		return NULL;
 	}
 
-	art_path = save_resized_album_art_from_imsrc(imsrc, path, get_image_size_type(JPEG_MED));
+	art_path = save_resized_album_art_from_imsrc(imsrc, cached_art_path, get_image_size_type(JPEG_MED));
 save_resized:
 	/* add a thumbnail version anticipating a bit for the most likely access.
 	 * The webservice will generate other thumbs on the fly if not available */
-	thumb_art_path = save_resized_album_art_from_imsrc(imsrc, path, get_image_size_type(JPEG_TN));
+	thumb_art_path = save_resized_album_art_from_imsrc(imsrc, cached_art_path, get_image_size_type(JPEG_TN));
 	free(thumb_art_path);
 	image_free(imsrc);
 
