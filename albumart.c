@@ -245,7 +245,7 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 
 	art_path = save_resized_album_art_from_imsrc(imsrc, path, get_image_size_type(JPEG_MED));
 save_resized:
-	/* add a thumbnail version anticipiating a bit for the most likely access.
+	/* add a thumbnail version anticipating a bit for the most likely access.
 	 * The webservice will generate other thumbs on the fly if not available */
 	thumb_art_path = save_resized_album_art_from_imsrc(imsrc, path, get_image_size_type(JPEG_TN));
 	free(thumb_art_path);
@@ -351,18 +351,28 @@ find_album_art(const char *path, uint8_t *image_data, int image_size)
 	if (album_art_cache == NULL) { 
 		album_art_cache = check_for_album_file(path, &album_art);
 		if (album_art_cache == NULL || lstat(album_art, &st) != 0) return 0;
-	}
-
+		free(album_art);
+	} else {
+ 		if (lstat(album_art_cache, &st) != 0) return 0;
+ 	}
+ 	
+ 	/* don't save path to db with JPEG_MED extension
+ 	* this is a little ugly, as currently structured I'm not sure
+ 	* how to easily edit check_embedded_art and the functions it uses
+ 	* to not return the path with the type included without breaking other things */
+ 	char *extension = strstr(album_art_cache, ".JPEG_MED.jpg");
+	if (extension != NULL) { extension[0] = '\0'; }
+	
 	int64_t ret = sql_get_int64_field(db, "SELECT ID from ALBUM_ART where PATH = %Q", album_art_cache);
 	if (ret == 0)
-	{
+	{	 
 		if (sql_exec(db, "INSERT into ALBUM_ART (PATH, TIMESTAMP) VALUES (%Q, %d)", album_art_cache, st.st_mtime) == SQLITE_OK)
 		{
 			ret = sqlite3_last_insert_rowid(db);
 		}
 		else
 		{
-			DPRINTF(E_WARN, L_METADATA, "Error setting %s as cover art for %s\n", album_art, path);
+			DPRINTF(E_WARN, L_METADATA, "Error setting %s as cover art for %s\n", album_art_cache, path);
 			ret = 0;
 		}
 	} else
@@ -370,7 +380,6 @@ find_album_art(const char *path, uint8_t *image_data, int image_size)
 		sql_exec(db, "UPDATE ALBUM_ART set TIMESTAMP = %d where ID = %lld", st.st_mtime, ret);
 	}
 	
-	free(album_art);
 	free(album_art_cache);
 	return ret;
 }
