@@ -207,7 +207,7 @@ update_if_album_art(const char *path)
 char *
 check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 {
-	char *cached_art_path = NULL, *art_path = NULL, *thumb_art_path = NULL;
+	char *cached_art_path = NULL, *art_path = NULL, *thumb_art_path = NULL, *dst_file = NULL;
 	image_s *imsrc;
 	static char last_path[PATH_MAX];
 	static unsigned int last_hash = 0;
@@ -220,6 +220,7 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 	}
 	
 	art_cache_exists(path, &cached_art_path);
+	dst_file = get_path_from_image_size_type(cached_art_path, get_image_size_type(JPEG_MED));
 		
 	/* If the embedded image matches the embedded image from the last file we
 	 * checked, just make a link. Better than storing it on the disk twice. */
@@ -228,11 +229,11 @@ check_embedded_art(const char *path, uint8_t *image_data, int image_size)
 	{
 		if( !last_success )
 			return NULL;
-		int ret = link_file(last_path, cached_art_path);
+		int ret = link_file(last_path, dst_file);
 		if (ret == 0)
 		{
 			imsrc = image_new_from_jpeg(NULL, 0, image_data, image_size, 1, ROTATE_NONE);
-			art_path = cached_art_path;
+			art_path = dst_file;
 			goto save_resized;			
 		}
 	}
@@ -334,7 +335,7 @@ add_cached_image:
 			image_s *imsrc = image_new_from_jpeg(file, 1, NULL, 0, 1, ROTATE_NONE);
 			if (!imsrc) break;
 
-			thumb = save_resized_album_art_from_imsrc(imsrc, file, get_image_size_type(JPEG_TN));
+			thumb = save_resized_album_art_from_imsrc(imsrc, cache_file, get_image_size_type(JPEG_TN));
 			image_free(imsrc);
 			free(thumb);
 			return ret == 0 ? cache_file : NULL;
